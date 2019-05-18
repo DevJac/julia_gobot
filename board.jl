@@ -66,8 +66,8 @@ function Base.getindex(a::AbstractArray, point::Point)
     a[point.x, point.y]
 end
 
-function Base.setindex!(a::AbstractArray, color::Color, point::Point)
-    a[point.x, point.y] = color
+function Base.setindex!(a::AbstractArray, value, point::Point)
+    a[point.x, point.y] = value
 end
 
 function Base.getindex(board::Board, point::Point)
@@ -81,13 +81,6 @@ end
 
 function liberties(board::Board, point::Point)
     board.liberties[point]
-end
-
-@test begin
-    b = Board(9)
-    @assert b[P(1, 1)] == Empty
-    b[P(1, 1)] = Black
-    b[P(1, 1)] == Black
 end
 
 function on_board(board::Board, point::Point)
@@ -110,7 +103,7 @@ function update_liberties(board::Board, points)
             end
             if board[neighboring_point] == Empty
                 push!(group_liberties, neighboring_point)
-            elseif board[this_point] == board[neighboring_point] && !neighboring_point in group
+            elseif board[this_point] == board[neighboring_point] && !(neighboring_point in group)
                 push!(group, neighboring_point)
                 recurse(board, neighboring_point, group, group_liberties)
             end
@@ -144,30 +137,35 @@ end
 
 @test begin
     b = Board(9)
+    @assert b[P(1, 1)] == Empty
+    b[P(1, 1)] = Black
+    b[P(1, 1)] == Black
+end
+
+@test begin
+    b = Board(9)
     @assert liberties(b, P(1, 1)) == 0
     @assert liberties(b, P(1, 2)) == 0
     b[P(1, 1)] = Black
-    @assert liberties(b, P(1, 1)) == 0
-    liberties(b, P(1, 2)) == 1
+    @assert liberties(b, P(1, 1)) == 2
+    @assert liberties(b, P(1, 2)) == 0
+    b[P(1, 2)] = Black
+    @assert liberties(b, P(1, 1)) == 3
+    @assert liberties(b, P(1, 2)) == 3
+    liberties(b, P(1, 3)) == 0
 end
 
+function remove_stones_without_liberties(board::Board, color_to_remove::Color)
+    points_remove = Set()
+    for point in points(board)
+        if board[point] == color_to_remove && liberties(board, point) == 0
+            board.positions[point] = Empty
+            push!(points_removed, point)
+        end
+    end
+    update_liberties(board, points_removed)
+end
 
-#    fn remove_stones_without_liberties(&mut self, color_to_remove: BoardPosition) {
-#        let mut points_removed = HashSet::with_capacity(8);
-#        for p in self.points() {
-#            if self.position(p) == color_to_remove && self.liberties(p) == 0 {
-#                self.set_position_without_updating_liberties(p, Empty);
-#                points_removed.insert(p);
-#            }
-#        }
-#        self.update_liberties(points_removed.into_iter().flat_map(Point::with_neighbors));
-#    }
-#
-#    pub fn valid_moves<'a>(&'a self, pos: BoardPosition) -> impl IntoIterator<Item = Point> + 'a {
-#        self.points()
-#            .filter(move |p: &Point| self.can_place_stone_at(*p, pos) && !self.ko(*p, pos))
-#    }
-#
 #    fn can_place_stone_at(&self, point: Point, pos: BoardPosition) -> bool {
 #        // We can't play on an occupied point.
 #        if self.position(point) != Empty {
