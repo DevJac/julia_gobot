@@ -166,57 +166,61 @@ function remove_stones_without_liberties(board::Board, color_to_remove::Color)
     update_liberties(board, points_removed)
 end
 
-#    fn can_place_stone_at(&self, point: Point, pos: BoardPosition) -> bool {
-#        // We can't play on an occupied point.
-#        if self.position(point) != Empty {
-#            return false;
-#        }
-#        for neighboring_point in point.neighbors() {
-#            if self.off_board(neighboring_point) {
-#                continue;
-#            }
-#            let neighboring_position = self.position(neighboring_point);
-#            // If a neighboring point is empty, then the placed stone will have a liberty.
-#            if neighboring_position == Empty {
-#                return true;
-#            }
-#            let neighboring_liberties = self.liberties(neighboring_point);
-#            // We can add to one of our groups, as long as it has enough liberties.
-#            if neighboring_position == pos && neighboring_liberties > 1 {
-#                return true;
-#            }
-#            // We can take the last liberty of an opposing group.
-#            if neighboring_position == pos.other() && neighboring_liberties == 1 {
-#                return true;
-#            }
-#        }
-#        false
-#    }
-#
-#    fn ko(&self, point: Point, pos: BoardPosition) -> bool {
-#        let would_be_captured = |neighboring_point| {
-#            self.on_board(neighboring_point)
-#                && self.position(neighboring_point) == pos.other()
-#                && self.liberties(neighboring_point) == 1
-#        };
-#        if !point.neighbors().any(would_be_captured) {
-#            return false;
-#        }
-#        // TODO: We should be able to avoid a full clone here.
-#        let mut b = self.clone();
-#        b.play(point, pos);
-#        self.history.contains(&b.board)
-#    }
-#
-#    pub fn play(&mut self, point: Point, pos: BoardPosition) {
-#        // TODO: We do not prevent illegal moves. Fix.
-#        self.set_position(point, pos);
-#        self.update_liberties(point.with_neighbors());
-#        self.remove_stones_without_liberties(pos.other());
-#        self.history.insert(self.board.clone());
-#    }
-#}
-#
+function can_place_stone(board::Board, point::Point, color::Color)
+    # We can't play on an occupied point.
+    if board[point] != Empty
+        return false
+    end
+    for neighboring_point in neighbors(point)
+        if off_board(board, neighboring_point)
+            continue
+        end
+        neighboring_color = board[neighboring_point]
+        # If a neighboring point is empty, then the placed stone will have a liberty.
+        if neighboring_color == Empty
+            return true
+        end
+        neighboring_liberties = liberties(board, neighboring_point)
+        # We can add to one of our groups, as long as it has enough liberties.
+        if neighboring_color == color && neighboring_liberties > 1
+            return true
+        end
+        # We can take the last liberty of an opposing group.
+        if neighboring_color == other(color) && neighboring_liberties == 1
+            return true
+        end
+    end
+    return false
+end
+
+function ko(board::Board, point::Point, color::Color)
+    function would_be_captured(neighboring_point)
+        on_board(board, neighboring_point) &&
+            board[neighboring_point] == other(color) &&
+            liberties(board, neighboring_point) == 1
+    end
+    # If no stones are going to be captured, then it is not a ko.
+    if !any(would_be_captured(neighboring_point) for neighboring_point in neighbors(point))
+        return false
+    end
+    b = deepcopy(board)
+    play(b, point, color)
+    return b.positions in board.history
+end
+
+function play(board::Board, point::Point, color::Color)
+    @assert board[point] == Empty
+    board[point] = color
+    update_liberties(board, with_neighbors(point))
+    remove_stones_without_liberties(other(color))
+    push!(board.history, board.positions)
+end
+
+
+
+
+
+
 ##[test]
 #fn fill_board() {
 #    let mut b = Board::new(19);
