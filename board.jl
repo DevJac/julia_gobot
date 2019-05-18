@@ -1,5 +1,4 @@
-using Test
-import Base.+
+using Test: @test
 
 @enum Color::Int8 Empty Black White
 
@@ -24,7 +23,7 @@ end
 
 P = Point
 
-function +(p1::Point, p2::Point)
+function Base.:+(p1::Point, p2::Point)
     Point(p1.x + p2.x, p1.y + p2.y)
 end
 
@@ -92,11 +91,12 @@ function off_board(board::Board, point::Point)
 end
 
 function points(board::Board)
-    map(Iterators.product(1:board.size, 1:board.size)) do (x, y) P(x, y) end
+    r = UnitRange{Int8}(1, board.size)
+    map(Iterators.product(r, r)) do (x, y) P(x, y) end
 end
 
 function update_liberties(board::Board, points)
-    function recurse(board::Board, this_point::Point, group, group_liberties)
+    function recurse(board::Board, this_point::Point, group::Set{Point}, group_liberties::Set{Point})
         for neighboring_point in neighbors(this_point)
             if off_board(board, neighboring_point)
                 continue
@@ -109,7 +109,7 @@ function update_liberties(board::Board, points)
             end
         end
     end
-    updated_liberties = fill(-1, (board.size, board.size))
+    updated_liberties = fill(Int8(-1), (board.size, board.size))
     for point in points
         if off_board(board, point)
             continue
@@ -121,8 +121,8 @@ function update_liberties(board::Board, points)
         if updated_liberties[point] != -1
             continue
         end
-        group = Set([point])
-        group_liberties = Set()
+        group = Set{Point}([point])
+        group_liberties = Set{Point}()
         recurse(board, point, group, group_liberties)
         for group_point in group
             updated_liberties[group_point] = length(group_liberties)
