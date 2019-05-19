@@ -54,7 +54,7 @@ mutable struct Board
     size::Int8
     positions::Array{Color}
     liberties::Array{Int16}
-    history::Set{Board}
+    history::Set{Array{Color}}
 end
 
 function Board(size)
@@ -91,7 +91,7 @@ function off_board(board::Board, point::Point)
 end
 
 function points(board::Board)
-    r = UnitRange{Int8}(1, board.size)
+    r = UnitRange{Int8}(Int8(1), board.size)
     map(Iterators.product(r, r)) do (x, y) P(x, y) end
 end
 
@@ -156,14 +156,14 @@ end
 end
 
 function remove_stones_without_liberties(board::Board, color_to_remove::Color)
-    points_remove = Set()
+    points_removed = Point[]
     for point in points(board)
         if board[point] == color_to_remove && liberties(board, point) == 0
             board.positions[point] = Empty
             push!(points_removed, point)
         end
     end
-    update_liberties(board, points_removed)
+    update_liberties(board, Iterators.flatten(map(with_neighbors, points_removed)))
 end
 
 function can_place_stone(board::Board, point::Point, color::Color)
@@ -203,84 +203,76 @@ function ko(board::Board, point::Point, color::Color)
     if !any(would_be_captured(neighboring_point) for neighboring_point in neighbors(point))
         return false
     end
-    b = deepcopy(board)
-    play(b, point, color)
-    return b.positions in board.history
+    future_board = deepcopy(board)
+    play(future_board, point, color)
+    return future_board.positions in board.history
+end
+
+function valid_moves(board::Board, color::Color)
+    filter(points(board)) do p
+        can_place_stone(board, p, color) && !ko(board, p, color)
+    end
 end
 
 function play(board::Board, point::Point, color::Color)
     @assert board[point] == Empty
+    push!(board.history, board.positions)
+    @assert board.positions in board.history
     board[point] = color
     update_liberties(board, with_neighbors(point))
-    remove_stones_without_liberties(other(color))
-    push!(board.history, board.positions)
+    remove_stones_without_liberties(board, other(color))
+end
+
+# Fill board
+@test begin
+    b = Board(9)
+    for p in points(b)
+        b[p] = Black
+    end
+    @assert b[P(1, 1)] == Black
+    @assert b[P(9, 9)] == Black
+    @assert b[P(5, 5)] == Black
+    @assert valid_moves(b, Black) == []
+    valid_moves(b, White) == []
+end
+
+# Atari placement
+@test begin
+    b = Board(9)
+    b[P(1, 1)] = Black
+    b[P(2, 2)] = Black
+    @assert P(1, 2) in valid_moves(b, Black)
+    @assert P(1, 2) in valid_moves(b, White)
+    play(b, P(1, 2), White)
+    liberties(b, P(1, 2)) == 1
+end
+
+# Ko
+@test begin
+    b = Board(9)
+    b[P(2, 1)] = Black
+    b[P(1, 2)] = Black
+    b[P(2, 3)] = Black
+    b[P(3, 1)] = White
+    b[P(4, 2)] = White
+    b[P(3, 3)] = White
+    @assert P(3, 2) in valid_moves(b, Black)
+    @assert P(3, 2) in valid_moves(b, White)
+    play(b, P(3, 2), Black)
+    @assert P(2, 2) in valid_moves(b, Black)
+    @assert P(2, 2) in valid_moves(b, White)
+    @assert b[P(3, 2)] == Black
+    play(b, P(2, 2), White)
+    @assert b[P(3, 2)] == Empty
+    @assert liberties(b, P(2, 2)) == 1
+    @assert !(P(3, 2) in valid_moves(b, Black))
+    P(3, 2) in valid_moves(b, White)
 end
 
 
 
-
-
-
-##[test]
-#fn fill_board() {
-#    let mut b = Board::new(19);
-#    for p in b.points() {
-#        b.set_position(p, Black);
-#    }
-#}
-#
-##[test]
-#fn atari_placement() {
-#    let mut b = Board::new(9);
-#    b.set_position(P(0, 0), Black);
-#    b.set_position(P(1, 1), Black);
-#    assert!(b
-#        .valid_moves(Black)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(0, 1)));
-#    assert!(b
-#        .valid_moves(White)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(0, 1)));
-#}
-#
 ##[test]
 #fn ko_placement() {
-#    let mut b = Board::new(9);
-#    b.set_position(P(1, 0), Black);
-#    b.set_position(P(0, 1), Black);
-#    b.set_position(P(1, 2), Black);
-#    b.set_position(P(2, 0), White);
-#    b.set_position(P(3, 1), White);
-#    b.set_position(P(2, 2), White);
-#    assert!(b
-#        .valid_moves(Black)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(2, 1)));
-#    assert!(b
-#        .valid_moves(White)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(2, 1)));
-#    assert_eq!(b.history.len(), 0);
-#    b.play(P(2, 1), Black);
-#    assert_eq!(b.history.len(), 1);
-#    assert!(b
-#        .valid_moves(Black)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(1, 1)));
-#    assert!(b
-#        .valid_moves(White)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(1, 1)));
-#    assert_eq!(b.history.len(), 1);
-#    b.play(P(1, 1), White);
-#    assert_eq!(b.history.len(), 2);
 #    assert!(!b
 #        .valid_moves(Black)
 #        .into_iter()
