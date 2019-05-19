@@ -216,11 +216,40 @@ end
 
 function play(board::Board, point::Point, color::Color)
     @assert board[point] == Empty
-    push!(board.history, board.positions)
+    push!(board.history, deepcopy(board.positions))
     @assert board.positions in board.history
     board[point] = color
     update_liberties(board, with_neighbors(point))
     remove_stones_without_liberties(board, other(color))
+end
+
+function print_board(board::Board)
+    function prettify(color)
+        if color == Empty
+            return ' '
+        elseif color == Black
+            return '○'
+        elseif color == White
+            return '●'
+        end
+    end
+    out = ""
+    for y in board.size:Int8(-1):1
+        out *= "|"
+        for x in Int8(1):board.size
+            out *= " " * prettify(board[P(x, y)])
+        end
+        out *= " |\n"
+    end
+    print(out)
+end
+
+function print_board_history(board::Board)
+    for positions in board.history
+        b = Board(board.size)
+        b.positions = positions
+        print_board(b)
+    end
 end
 
 # Fill board
@@ -265,6 +294,7 @@ end
     play(b, P(2, 2), White)
     @assert b[P(3, 2)] == Empty
     @assert liberties(b, P(2, 2)) == 1
+    @assert ko(b, P(3, 2), Black)
     @assert !(P(3, 2) in valid_moves(b, Black))
     P(3, 2) in valid_moves(b, White)
 end
