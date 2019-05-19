@@ -299,61 +299,14 @@ end
     P(3, 2) in valid_moves(b, White)
 end
 
-
-
-##[test]
-#fn ko_placement() {
-#    assert!(!b
-#        .valid_moves(Black)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(2, 1)));
-#    assert!(b
-#        .valid_moves(White)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(2, 1)));
-#}
-#
-##[test]
-#fn valid_moves_have_liberties() {
-#    let mut b = Board::new(5);
-#    b.set_position(P(0, 1), Black);
-#    b.set_position(P(1, 1), Black);
-#    assert!(b
-#        .valid_moves(White)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(0, 0)));
-#    b.set_position(P(1, 0), Black);
-#    assert!(!b
-#        .valid_moves(White)
-#        .into_iter()
-#        .collect::<HashSet<Point>>()
-#        .contains(&P(0, 0)));
-#}
-#
-##[test]
-#fn multiple_stones_captured() {
-#    let mut b = Board::new(5);
-#    b.set_position(P(0, 0), Black);
-#    b.set_position(P(1, 0), White);
-#    b.set_position(P(0, 1), Black);
-#    b.set_position(P(1, 1), White);
-#    b.play(P(0, 2), White);
-#    assert_eq!(b.position(P(0, 0)), Empty);
-#    assert_eq!(b.position(P(0, 1)), Empty);
-#}
-#
-##[test]
-#fn board_equality() {
-#    assert_eq!(Board::new(9), Board::new(9));
-#    assert_ne!(Board::new(9), Board::new(19));
-#    let mut b1 = Board::new(9);
-#    let mut b2 = Board::new(9);
-#    b1.set_position(P(0, 0), Black);
-#    b2.set_position(P(0, 0), Black);
-#    assert_eq!(b1, b2);
-#    b2.set_position(P(0, 0), White);
-#    assert_ne!(b1, b2);
-#}
+# Multiple captured stones
+@test begin
+    b = Board(5)
+    b[P(1, 1)] = Black
+    b[P(2, 1)] = White
+    b[P(1, 2)] = Black
+    b[P(2, 2)] = White
+    play(b, P(1, 3), White)
+    @assert b[P(1, 1)] == Empty
+    b[P(1, 2)] == Empty
+end
