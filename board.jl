@@ -1,3 +1,10 @@
+module BoardModule
+
+export Color, Empty, Black, White
+export Point, P, other, neighbors, with_neighbors
+export Board, liberties, on_board, off_board, points, valid_moves, play
+export print_board, print_board_history
+
 using Test: @test
 
 @enum Color::Int8 Empty Black White
@@ -309,4 +316,6 @@ end
     play(b, P(1, 3), White)
     @assert b[P(1, 1)] == Empty
     b[P(1, 2)] == Empty
+end
+
 end
