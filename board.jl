@@ -240,7 +240,7 @@ function print_board(board::Board)
             return '●'
         end
     end
-    out = ""
+    out = "-" * repeat("-", board.size*2) * "--\n"
     for y in board.size:Int8(-1):1
         out *= "|"
         for x in Int8(1):board.size
@@ -248,6 +248,7 @@ function print_board(board::Board)
         end
         out *= " |\n"
     end
+    out *= "-" * repeat("-", board.size*2) * "--\n"
     print(out)
 end
 

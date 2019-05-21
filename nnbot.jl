@@ -4,6 +4,7 @@ using .BoardModule
 
 using Test: @test
 using Flux
+using BSON: @save, @load
 
 @test begin
     b = Board(9)
@@ -11,8 +12,8 @@ using Flux
     b[P(1, 1)] == Black
 end
 
-function encode_board(board::Board, color::Color)
-    valid_moves_set = Set(valid_moves(board, color))
+function encode_board(board::Board, color::Color)::Array{Int8, 4}
+    valid_move_set = Set(valid_moves(board, color))
     t = zeros(Int8, board.size, board.size, 11, 1)
     for p in points(board)
         t[p.x, p.y, 1] = board[p] == Black && liberties(board, p) == 1
@@ -25,7 +26,7 @@ function encode_board(board::Board, color::Color)
         t[p.x, p.y, 8] = board[p] == White && liberties(board, p) > 3
         t[p.x, p.y, 9] = color == Black
         t[p.x, p.y, 10] = color == White
-        t[p.x, p.y, 11] = p in valid_moves_set
+        t[p.x, p.y, 11] = p in valid_move_set
     end
     return t
 end
@@ -66,7 +67,7 @@ function create_model(board::Board)
             value_hidden_layer,
             value_output_layer)
         conv_chain_output = conv_chain(x)
-        return (policy_chain(conv_chain_output), value_chain(conv_chain_output))
+        return (policy_chain(conv_chain_output), value_chain(conv_chain_output)[1])
     end
 end
 
@@ -75,5 +76,79 @@ end
     m = create_model(b)
     y_policy, y_value = m(encode_board(b, Black))
     @assert size(y_policy) == (Int16(b.size)^2, 1)
-    size(y_value) == (1, 1)
+    size(y_value) == ()
+end
+
+struct MoveMemory
+    board::Board
+    color::Color
+    move::Point
+end
+
+mutable struct NNBot
+    move_memory::Array{MoveMemory}
+end
+
+function NNBot()
+    NNBot(Array{MoveMemory}[])
+end
+
+function genmove_random(bot::NNBot, board::Board, color::Color)
+    valid_move_set = Set(valid_moves(board, color))
+    if length(valid_move_set) == 0
+        return true, nothing
+    end
+    random_move = rand(valid_move_set)
+    push!(bot.move_memory, MoveMemory(deepcopy(board), color, random_move))
+    return false, random_move
+end
+
+function report_winner(bot::NNBot, winning_color::Color)
+    X = Array{Int8, 4}[]
+    Y_policy = Array{Int8, 2}[]
+    Y_value = Int8[]
+    for move in bot.move_memory
+        won = move.color == winning_color
+        correct_policy = zeros(Int8, move.board.size, move.board.size)
+        correct_policy[move.move] = won ? 1 : -1
+        push!(X, encode_board(move.board, move.color))
+        push!(Y_policy, correct_policy)
+        push!(Y_value, won ? Int8(1) : Int8(0))
+    end
+    X = cat(X, dims=5)
+    Y_policy = cat(Y_policy, dims=2)
+    Y_value = cat(Y_value, dims=1)
+    bot.move_memory = Array{MoveMemory}[]
+    game_id = join(rand("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in 1:6)
+    game_file = "games/" * game_id * ".game"
+    @save game_file X Y_policy Y_value
+end
+
+function self_play_single_game()
+    board = Board(9)
+    bot = NNBot()
+    print_board(board)
+    while true
+        # Black's move
+        resign, move = genmove_random(bot, board, Black)
+        if resign
+            println("White Wins!")
+            report_winner(bot, White)
+            break
+        end
+        play(board, move, Black)
+        print_board(board)
+        resign, move = genmove_random(bot, board, White)
+        if resign
+            println("Black Wins!")
+            report_winner(bot, Black)
+            break
+        end
+        play(board, move, White)
+        print_board(board)
+    end
+end
+
+for _ in 1:1
+    self_play_single_game()
 end
