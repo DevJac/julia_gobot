@@ -5,6 +5,7 @@ using .BoardModule
 using Test: @test
 using Flux
 using BSON: @save, @load
+using ProgressMeter
 
 @test begin
     b = Board(9)
@@ -42,7 +43,7 @@ end
     encode_board(b, Black)[1, 1, 3] == 0
 end
 
-function create_model(board::Board)
+function create_model(board_size::Int16)
     function (x)
         # Individual layers
         conv1 = Conv((3, 3), 11=>50, relu)
@@ -51,7 +52,7 @@ function create_model(board::Board)
         conv4 = Conv((3, 3), 50=>50, relu)
         processed_board = Dense(50, 500)
         policy_hidden_layer = Dense(500, 500, relu)
-        policy_output_layer = Dense(500, Int16(board.size)^2)
+        policy_output_layer = Dense(500, board_size^2)
         value_hidden_layer = Dense(500, 500, relu)
         value_output_layer = Dense(500, 1, sigmoid)
 
@@ -67,7 +68,7 @@ function create_model(board::Board)
             policy_hidden_layer,
             policy_output_layer,
             softmax,
-            (a) -> reshape(a, (board.size, board.size, size(x, 4))))
+            (a) -> reshape(a, (board_size, board_size, size(x, 4))))
         value_chain = Chain(
             value_hidden_layer,
             value_output_layer)
@@ -78,7 +79,7 @@ end
 
 @test begin
     b = Board(9)
-    m = create_model(b)
+    m = create_model(Int16(b.size))
     encoded_board = encode_board(b, Black)
     @assert size(encoded_board) == (b.size, b.size, 11, 1)
     y_policy, y_value = m(encoded_board)
@@ -102,12 +103,12 @@ mutable struct NNBot
     move_memory::Array{MoveMemory}
 end
 
-function NNBot(board::Board)
+function NNBot(board_size::Int16)
     if isfile("model.bson")
         @load "model.bson" model
         NNBot(model, MoveMemory[])
     else
-        NNBot(create_model(board), MoveMemory[])
+        NNBot(create_model(board_size), MoveMemory[])
     end
 end
 
@@ -150,54 +151,71 @@ function report_winner(bot::NNBot, winning_color::Color)
     return game_memory
 end
 
-function train(bot::NNBot, game_memory::GameMemory)
-    println("Training Prep")
+function train(model, game_memories::Array{GameMemory})
     X = Array{Int8, 4}[]
     Y_policy = Array{Float32, 2}[]
     Y_value = Int8[]
-    move_memory_length = length(game_memory.move_memory)
-    for i in 1:move_memory_length
-        move = game_memory.move_memory[i]
-        won = move.color == game_memory.winning_color
-        if i < move_memory_length
-            _, v = bot.model(encode_board(game_memory.move_memory[i+1].board, move.color))
-            local next_move_value = v.data
-        else
-            local next_move_value = won ? 1f0 : 0f0
+    @showprogress 1 "Training Prep" for game_memory in game_memories
+        move_memory_length = length(game_memory.move_memory)
+        for i in 1:move_memory_length
+            move = game_memory.move_memory[i]
+            won = move.color == game_memory.winning_color
+            if i < move_memory_length
+                _, v = model(encode_board(game_memory.move_memory[i+1].board, move.color))
+                local next_move_value = v.data
+            else
+                local next_move_value = won ? 1f0 : 0f0
+            end
+            policy, value = model(encode_board(move.board, move.color))
+            correct_policy = zeros(Float32, move.board.size, move.board.size)
+            correct_policy[move.move] = (won ? 1f0 : -1f0) * abs(value.data - next_move_value)
+            push!(X, encode_board(move.board, move.color))
+            push!(Y_policy, correct_policy)
+            push!(Y_value, won ? Int8(1) : Int8(0))
         end
-        policy, value = bot.model(encode_board(move.board, move.color))
-        correct_policy = zeros(Float32, move.board.size, move.board.size)
-        correct_policy[move.move] = (won ? 1f0 : -1f0) * abs(value.data - next_move_value)
-        push!(X, encode_board(move.board, move.color))
-        push!(Y_policy, correct_policy)
-        push!(Y_value, won ? Int8(1) : Int8(0))
     end
     X = cat(X..., dims=4)
     Y_policy = cat(Y_policy..., dims=3)
     function loss(x, y)
-        y_policy, y_value = bot.model(x)
+        y_policy, y_value = model(x)
         new_shape = (size(y[1])[1] * size(y[1])[2], size(y[1])[3])
         policy_loss = Flux.crossentropy(reshape(y_policy, new_shape), reshape(y[1], new_shape))
         value_loss = Flux.mse(y_value, y[2])
         return policy_loss + value_loss
     end
-    println("Training.       Pre-training loss: ", loss(X, (Y_policy, Y_value)).data)
-    Flux.train!(loss, params(bot.model), [(X, (Y_policy, Y_value))], Descent())
-    println("Training Done. Post-training loss: ", loss(X, (Y_policy, Y_value)).data)
-    sleep(1.5)
+    println(typeof(X))
+    println(typeof(Y_policy))
+    println(typeof(Y_value))
+    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
+    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
+    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
+    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
+    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
+    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
+    opt = ADAM()
+    pre_training_loss = nothing
+    post_training_loss = nothing
+    for epoch in 1:10
+        pre_training_loss = loss(X, (Y_policy, Y_value)).data
+        println("Training.       Pre-training loss: ", pre_training_loss)
+        Flux.train!(loss, params(model), [(X, (Y_policy, Y_value))], opt)
+        post_training_loss = loss(X, (Y_policy, Y_value)).data
+        println("Training Done. Post-training loss: ", post_training_loss)
+    end
+    return (pre_training_loss, post_training_loss)
 end
 
-function save_model(bot::NNBot)
-    model = bot.model
+function save_model(model)
     temp_name = "model.bson." * uid()
     @save temp_name model
     mv(temp_name, "model.bson", force=true)
 end
 
 function self_play(n)
+    game_memories = GameMemory[]
+    bot = NNBot(Int16(9))
     for game in 1:n
         board = Board(9)
-        bot = NNBot(board)
         print_board(board)
         game_memory = nothing
         while true
@@ -205,7 +223,7 @@ function self_play(n)
             resign, move = genmove_intuition(bot, board, Black)
             if resign
                 println("White Wins Game ", game)
-                game_memory = report_winner(bot, White)
+                push!(game_memories, report_winner(bot, White))
                 break
             end
             play(board, move, Black)
@@ -213,16 +231,22 @@ function self_play(n)
             resign, move = genmove_intuition(bot, board, White)
             if resign
                 println("Black Wins Game ", game)
-                game_memory = report_winner(bot, Black)
+                push!(game_memories, report_winner(bot, Black))
                 break
             end
             play(board, move, White)
             print_board(board)
         end
-        train(bot, game_memory)
-        save_model(bot)
     end
+    pre_loss, post_loss = train(bot.model, game_memories)
+    save_model(bot.model)
+    return pre_loss, post_loss
 end
 
 self_play(1)
-self_play(99)
+for _ in 1:10
+    losses = self_play(10)
+    open("loss.txt", "a") do file
+        println(file, losses)
+    end
+end
