@@ -62,7 +62,8 @@ function create_model(board::Board)
         policy_chain = Chain(
             policy_hidden_layer,
             policy_output_layer,
-            softmax)
+            softmax,
+            (a) -> reshape(a, (board.size, board.size)))
         value_chain = Chain(
             value_hidden_layer,
             value_output_layer)
@@ -75,7 +76,7 @@ end
     b = Board(9)
     m = create_model(b)
     y_policy, y_value = m(encode_board(b, Black))
-    @assert size(y_policy) == (Int16(b.size)^2, 1)
+    @assert size(y_policy) == (b.size, b.size)
     size(y_value) == ()
 end
 
@@ -86,11 +87,12 @@ struct MoveMemory
 end
 
 mutable struct NNBot
+    model
     move_memory::Array{MoveMemory}
 end
 
-function NNBot()
-    NNBot(Array{MoveMemory}[])
+function NNBot(board::Board)
+    NNBot(create_model(board), Array{MoveMemory}[])
 end
 
 function genmove_random(bot::NNBot, board::Board, color::Color)
@@ -101,6 +103,25 @@ function genmove_random(bot::NNBot, board::Board, color::Color)
     random_move = rand(valid_move_set)
     push!(bot.move_memory, MoveMemory(deepcopy(board), color, random_move))
     return false, random_move
+end
+
+function genmove_intuition(bot::NNBot, board::Board, color::Color)
+    valid_move_set = Set(valid_moves(board, color))
+    if length(valid_move_set) == 0
+        return true, nothing
+    end
+    policy, value = bot.model(encode_board(board, color))
+    best_move = nothing
+    best_move_policy_value = -99.9f0
+    for i in eachindex(policy)
+        move = P(i[1], i[2])
+        policy_value = policy[i]
+        if move in valid_move_set && policy_value > best_move_policy_value
+            best_move_policy_value = policy_value
+            best_move = move
+        end
+    end
+    return false, best_move
 end
 
 function report_winner(bot::NNBot, winning_color::Color)
@@ -126,11 +147,11 @@ end
 
 function self_play_single_game()
     board = Board(9)
-    bot = NNBot()
+    bot = NNBot(board)
     print_board(board)
     while true
         # Black's move
-        resign, move = genmove_random(bot, board, Black)
+        resign, move = genmove_intuition(bot, board, Black)
         if resign
             println("White Wins!")
             report_winner(bot, White)
@@ -138,7 +159,7 @@ function self_play_single_game()
         end
         play(board, move, Black)
         print_board(board)
-        resign, move = genmove_random(bot, board, White)
+        resign, move = genmove_intuition(bot, board, White)
         if resign
             println("Black Wins!")
             report_winner(bot, Black)
