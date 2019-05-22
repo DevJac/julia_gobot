@@ -156,8 +156,9 @@ function report_winner(bot::NNBot, winning_color::Color)
     return game_memory
 end
 
-function game_memories_to_data(model, game_memories::Array{GameMemory})::Array{Tuple{Array{Int8,4},Tuple{Array{Float32,2},Int8}},1}
-    @showprogress 1 "Training Prep " map(game_memories) do game_memory
+function game_memories_to_data(model, game_memories::Array{GameMemory})
+    data = Tuple{Array{Int8,4},Tuple{Array{Float32,2},Int8}}[]
+    @showprogress 1 "Training Prep " for game_memory in game_memories
         move_memory_length = length(game_memory.move_memory)
         for i in 1:move_memory_length
             move = game_memory.move_memory[i]
@@ -178,9 +179,10 @@ function game_memories_to_data(model, game_memories::Array{GameMemory})::Array{T
             x = encoded_board
             y_policy = correct_policy
             y_value = won ? Int8(1) : Int8(0)
-            return (x, (y_policy, y_value))
+            push!(data, (x, (y_policy, y_value)))
         end
     end
+    return data
 end
 
 function train(model, game_memories::Array{GameMemory})
@@ -193,15 +195,14 @@ function train(model, game_memories::Array{GameMemory})
         value_loss = Flux.mse(y_value, y[2])
         return policy_loss + value_loss
     end
-    batch_size = 1000
+    batch_size = 100
     total_loss = 0.0
     opt = Descent()
     data_length = length(data)
-    for i in 1:batch_size:data_length
+    @showprogress 1 "Training " for i in 1:batch_size:data_length
         batch = data[i:min(i+(batch_size-1), data_length)]
         Flux.train!(loss, params(model.conv_chain, model.policy_chain, model.value_chain), batch, opt)
         batch_loss = sum(loss(x, (y_policy, y_value)).data for (x, (y_policy, y_value)) in batch)
-        println("Training. Loss: ", batch_loss / length(batch))
         total_loss += batch_loss
     end
     return total_loss / data_length
@@ -240,14 +241,16 @@ function self_play(n)
             print_board(board)
         end
     end
+    average_game_length = sum(length(gm.move_memory) for gm in game_memories) / length(game_memories)
+    println("Average game length: ", average_game_length)
     loss = train(bot.model, game_memories)
     save_model(bot.model)
-    return loss
+    return average_game_length, loss
 end
 
 while true
-    loss = self_play(20)
+    stats = self_play(20)
     open("loss.txt", "a") do file
-        println(file, loss)
+        println(file, stats)
     end
 end
