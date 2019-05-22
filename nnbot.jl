@@ -45,15 +45,17 @@ end
 
 function create_model(board_size::Int16)
     # Individual layers
-    conv1 = Conv((3, 3), 11=>50, relu)
-    conv2 = Conv((3, 3), 50=>50, relu)
-    conv3 = Conv((3, 3), 50=>50, relu)
-    conv4 = Conv((3, 3), 50=>50, relu)
-    processed_board = Dense(50, 500)
-    policy_hidden_layer = Dense(500, 500, relu)
-    policy_output_layer = Dense(500, board_size^2)
-    value_hidden_layer = Dense(500, 500, relu)
-    value_output_layer = Dense(500, 1, sigmoid)
+    upper_network_size = 40
+    lower_network_size = 200
+    conv1 = Conv((3, 3), 11=>upper_network_size, relu)
+    conv2 = Conv((3, 3), upper_network_size=>upper_network_size, relu)
+    conv3 = Conv((3, 3), upper_network_size=>upper_network_size, relu)
+    conv4 = Conv((3, 3), upper_network_size=>upper_network_size, relu)
+    processed_board = Dense(upper_network_size, lower_network_size)
+    policy_hidden_layer = Dense(lower_network_size, lower_network_size, relu)
+    policy_output_layer = Dense(lower_network_size, board_size^2)
+    value_hidden_layer = Dense(lower_network_size, lower_network_size, relu)
+    value_output_layer = Dense(lower_network_size, 1, sigmoid)
 
     # Assembled layers
     conv_chain = Chain(
@@ -61,7 +63,7 @@ function create_model(board_size::Int16)
         conv2,
         conv3,
         conv4,
-        (a) -> reshape(a, (50, 1)),
+        (a) -> reshape(a, upper_network_size),
         processed_board)
     policy_chain = Chain(
         policy_hidden_layer,
@@ -162,7 +164,7 @@ function train(model, game_memories::Array{GameMemory})
     X = Array{Int8, 4}[]
     Y_policy = Array{Float32, 2}[]
     Y_value = Int8[]
-    @showprogress 1 "Training Prep" for game_memory in game_memories
+    @showprogress 1 "Training Prep " for game_memory in game_memories
         move_memory_length = length(game_memory.move_memory)
         for i in 1:move_memory_length
             move = game_memory.move_memory[i]
@@ -236,8 +238,8 @@ function self_play(n)
     return pre_loss, post_loss
 end
 
-for _ in 1:10
-    losses = self_play(10)
+while true
+    losses = self_play(20)
     open("loss.txt", "a") do file
         println(file, losses)
     end
