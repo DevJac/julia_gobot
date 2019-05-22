@@ -166,10 +166,10 @@ function game_memories_to_data(model, game_memories::Array{GameMemory})::Array{T
                 next_move = game_memory.move_memory[i+2]
                 @assert move.color == next_move.color
                 # TODO: We encode boards twice or more. We should cache the encoded boards.
-                _, v = model(encode_board(next_move, move.color))
-                local next_move_value = v.data
+                _, v = model(encode_board(next_move.board, move.color))
+                next_move_value = v.data
             else
-                local next_move_value = won ? 1f0 : 0f0
+                next_move_value = won ? 1f0 : 0f0
             end
             encoded_board = encode_board(move.board, move.color)
             policy, value = model(encoded_board)
@@ -181,7 +181,6 @@ function game_memories_to_data(model, game_memories::Array{GameMemory})::Array{T
             return (x, (y_policy, y_value))
         end
     end
-
 end
 
 function train(model, game_memories::Array{GameMemory})
@@ -195,14 +194,17 @@ function train(model, game_memories::Array{GameMemory})
         return policy_loss + value_loss
     end
     batch_size = 1000
+    total_loss = 0.0
     opt = Descent()
-    for i in batch_size:batch_size:length(data)
-        batch = data[i-batch_size+1:i]
+    data_length = length(data)
+    for i in 1:batch_size:data_length
+        batch = data[i:min(i+(batch_size-1), data_length)]
         Flux.train!(loss, params(model.conv_chain, model.policy_chain, model.value_chain), batch, opt)
-        local batch_loss = sum(loss(x, (y_policy, y_value)).data for (x, (y_policy, y_value)) in batch) / length(batch)
-        println("Training. Loss: ", batch_loss)
+        batch_loss = sum(loss(x, (y_policy, y_value)).data for (x, (y_policy, y_value)) in batch)
+        println("Training. Loss: ", batch_loss / length(batch))
+        total_loss += batch_loss
     end
-    return batch_loss
+    return total_loss / data_length
 end
 
 function save_model(model)
