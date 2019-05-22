@@ -7,6 +7,7 @@ using Flux
 using BSON: @save, @load
 using ProgressMeter
 using Random
+using Printf
 
 b = Board(9)
 b[P(1, 1)] = Black
@@ -185,7 +186,7 @@ function game_memories_to_data(model, game_memories::Array{GameMemory})
     return data
 end
 
-function train(model, game_memories::Array{GameMemory})
+function train(model, opt, game_memories::Array{GameMemory})
     data = game_memories_to_data(model, game_memories)
     shuffle!(data)
     function loss(x, y)
@@ -195,9 +196,8 @@ function train(model, game_memories::Array{GameMemory})
         value_loss = Flux.mse(y_value, y[2])
         return policy_loss + value_loss
     end
-    batch_size = 100
+    batch_size = 1000
     total_loss = 0.0
-    opt = Descent()
     data_length = length(data)
     @showprogress 1 "Training " for i in 1:batch_size:data_length
         batch = data[i:min(i+(batch_size-1), data_length)]
@@ -214,43 +214,48 @@ function save_model(model)
     mv(temp_name, "model.bson", force=true)
 end
 
-function self_play(n)
+function self_play(n, limit=1_000_000)
     game_memories = GameMemory[]
     bot = NNBot(7)
-    for game in 1:n
-        board = Board(7)
-        print_board(board)
-        game_memory = nothing
-        while true
-            # Black's move
-            resign, move = genmove_intuition(bot, board, Black)
-            if resign
-                println("White Wins Game ", game)
-                push!(game_memories, report_winner(bot, White))
-                break
-            end
-            play(board, move, Black)
+    optimizer = ADADelta()
+    for _ in 1:limit
+        for game in 1:n
+            board = Board(7)
             print_board(board)
-            resign, move = genmove_intuition(bot, board, White)
-            if resign
-                println("Black Wins Game ", game)
-                push!(game_memories, report_winner(bot, Black))
-                break
+            game_memory = nothing
+            while true
+                # Black's move
+                resign, move = genmove_intuition(bot, board, Black)
+                if resign
+                    println("White Wins Game ", game)
+                    push!(game_memories, report_winner(bot, White))
+                    break
+                end
+                play(board, move, Black)
+                print_board(board)
+                resign, move = genmove_intuition(bot, board, White)
+                if resign
+                    println("Black Wins Game ", game)
+                    push!(game_memories, report_winner(bot, Black))
+                    break
+                end
+                play(board, move, White)
+                print_board(board)
             end
-            play(board, move, White)
-            print_board(board)
+        end
+        game_memories_limit = 60
+        game_memories = game_memories[max(1, end-(game_memories_limit-1)):end]
+        @assert length(game_memories) <= game_memories_limit
+        total_moves = sum(length(gm.move_memory) for gm in game_memories)
+        average_game_length = total_moves / length(game_memories)
+        @printf("Training on %d moves from %d games. Average moves per game: %.2f\n", total_moves, length(game_memories), average_game_length)
+        loss = train(bot.model, optimizer, game_memories)
+        save_model(bot.model)
+        open("loss.txt", "a") do file
+            println(file, (average_game_length, loss))
         end
     end
-    average_game_length = sum(length(gm.move_memory) for gm in game_memories) / length(game_memories)
-    println("Average game length: ", average_game_length)
-    loss = train(bot.model, game_memories)
-    save_model(bot.model)
-    return average_game_length, loss
 end
 
-while true
-    stats = self_play(20)
-    open("loss.txt", "a") do file
-        println(file, stats)
-    end
-end
+self_play(1, 1)
+self_play(20)
