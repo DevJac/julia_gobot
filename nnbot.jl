@@ -7,11 +7,9 @@ using Flux
 using BSON: @save, @load
 using ProgressMeter
 
-@test begin
-    b = Board(9)
-    b[P(1, 1)] = Black
-    b[P(1, 1)] == Black
-end
+b = Board(9)
+b[P(1, 1)] = Black
+@test b[P(1, 1)] == Black
 
 function uid()
     join(rand("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in 1:6)
@@ -36,22 +34,21 @@ function encode_board(board::Board, color::Color)::Array{Int8, 4}
     return t
 end
 
-@test begin
-    b = Board(9)
-    play(b, P(1, 1), Black)
-    @assert encode_board(b, Black)[1, 1, 2] == 1
-    encode_board(b, Black)[1, 1, 3] == 0
-end
+b = Board(9)
+play(b, P(1, 1), Black)
+@test encode_board(b, Black)[1, 1, 2] == 1
+@test encode_board(b, Black)[1, 1, 3] == 0
 
-function create_model(board_size::Int16)
+function create_model(board_size)
+    board_size = Int64(board_size)
     # Individual layers
     upper_network_size = 40
     lower_network_size = 200
-    conv1 = Conv((3, 3), 11=>upper_network_size, relu)
-    conv2 = Conv((3, 3), upper_network_size=>upper_network_size, relu)
-    conv3 = Conv((3, 3), upper_network_size=>upper_network_size, relu)
-    conv4 = Conv((3, 3), upper_network_size=>upper_network_size, relu)
-    processed_board = Dense(upper_network_size, lower_network_size)
+    conv1 = Conv((3, 3), 11=>upper_network_size, relu, pad=(1, 1))
+    conv2 = Conv((3, 3), upper_network_size=>upper_network_size, relu, pad=(1, 1))
+    conv3 = Conv((3, 3), upper_network_size=>upper_network_size, relu, pad=(1, 1))
+    conv4 = Conv((3, 3), upper_network_size=>upper_network_size, relu, pad=(1, 1))
+    processed_board = Dense(upper_network_size*board_size^2, lower_network_size)
     policy_hidden_layer = Dense(lower_network_size, lower_network_size, relu)
     policy_output_layer = Dense(lower_network_size, board_size^2)
     value_hidden_layer = Dense(lower_network_size, lower_network_size, relu)
@@ -63,7 +60,7 @@ function create_model(board_size::Int16)
         conv2,
         conv3,
         conv4,
-        (a) -> reshape(a, upper_network_size),
+        (a) -> reshape(a, upper_network_size*board_size^2),
         processed_board)
     policy_chain = Chain(
         policy_hidden_layer,
@@ -83,18 +80,16 @@ function create_model(board_size::Int16)
     end
 end
 
-@test begin
-    b = Board(9)
-    m = create_model(Int16(b.size))
-    encoded_board = encode_board(b, Black)
-    @assert size(encoded_board) == (b.size, b.size, 11, 1)
-    y_policy, y_value = m(encoded_board)
-    @assert size(y_policy) == (b.size, b.size)
-    @assert size(y_value) == ()
-    y_policy2, y_value2 = m(encoded_board)
-    @assert y_policy == y_policy2
-    y_value == y_value2
-end
+b = Board(25)
+m = create_model(b.size)
+encoded_board = encode_board(b, Black)
+@test size(encoded_board) == (b.size, b.size, 11, 1)
+y_policy, y_value = m(encoded_board)
+@test size(y_policy) == (b.size, b.size)
+@test size(y_value) == ()
+y_policy2, y_value2 = m(encoded_board)
+@test y_policy == y_policy2
+@test y_value == y_value2
 
 struct MoveMemory
     board::Board
