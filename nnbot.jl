@@ -44,36 +44,40 @@ end
 end
 
 function create_model(board_size::Int16)
-    function (x)
-        # Individual layers
-        conv1 = Conv((3, 3), 11=>50, relu)
-        conv2 = Conv((3, 3), 50=>50, relu)
-        conv3 = Conv((3, 3), 50=>50, relu)
-        conv4 = Conv((3, 3), 50=>50, relu)
-        processed_board = Dense(50, 500)
-        policy_hidden_layer = Dense(500, 500, relu)
-        policy_output_layer = Dense(500, board_size^2)
-        value_hidden_layer = Dense(500, 500, relu)
-        value_output_layer = Dense(500, 1, sigmoid)
+    # Individual layers
+    conv1 = Conv((3, 3), 11=>50, relu)
+    conv2 = Conv((3, 3), 50=>50, relu)
+    conv3 = Conv((3, 3), 50=>50, relu)
+    conv4 = Conv((3, 3), 50=>50, relu)
+    processed_board = Dense(50, 500)
+    policy_hidden_layer = Dense(500, 500, relu)
+    policy_output_layer = Dense(500, board_size^2)
+    value_hidden_layer = Dense(500, 500, relu)
+    value_output_layer = Dense(500, 1, sigmoid)
 
-        # Assembled layers
-        conv_chain = Chain(
-            conv1,
-            conv2,
-            conv3,
-            conv4,
-            (a) -> reshape(a, (50, size(x, 4))),
-            processed_board)
-        policy_chain = Chain(
-            policy_hidden_layer,
-            policy_output_layer,
-            softmax,
-            (a) -> reshape(a, (board_size, board_size, size(x, 4))))
-        value_chain = Chain(
-            value_hidden_layer,
-            value_output_layer)
+    # Assembled layers
+    conv_chain = Chain(
+        conv1,
+        conv2,
+        conv3,
+        conv4,
+        (a) -> reshape(a, (50, 1)),
+        processed_board)
+    policy_chain = Chain(
+        policy_hidden_layer,
+        policy_output_layer,
+        softmax,
+        (a) -> reshape(a, (board_size, board_size)))
+    value_chain = Chain(
+        value_hidden_layer,
+        value_output_layer)
+
+    function (x)
         conv_chain_output = conv_chain(x)
-        return (policy_chain(conv_chain_output), value_chain(conv_chain_output)[1])
+        policy_output = policy_chain(conv_chain_output)
+        @assert !any(isnan(n) for n in policy_output)
+        value_output = value_chain(conv_chain_output)[1]
+        return (policy_output, value_output)
     end
 end
 
@@ -83,8 +87,11 @@ end
     encoded_board = encode_board(b, Black)
     @assert size(encoded_board) == (b.size, b.size, 11, 1)
     y_policy, y_value = m(encoded_board)
-    @assert size(y_policy) == (b.size, b.size, 1)
-    size(y_value) == ()
+    @assert size(y_policy) == (b.size, b.size)
+    @assert size(y_value) == ()
+    y_policy2, y_value2 = m(encoded_board)
+    @assert y_policy == y_policy2
+    y_value == y_value2
 end
 
 struct MoveMemory
@@ -174,34 +181,20 @@ function train(model, game_memories::Array{GameMemory})
             push!(Y_value, won ? Int8(1) : Int8(0))
         end
     end
-    X = cat(X..., dims=4)
-    Y_policy = cat(Y_policy..., dims=3)
+    data = [(X[i], (Y_policy[i], Y_value[i])) for i in 1:length(X)]
     function loss(x, y)
         y_policy, y_value = model(x)
-        new_shape = (size(y[1])[1] * size(y[1])[2], size(y[1])[3])
-        policy_loss = Flux.crossentropy(reshape(y_policy, new_shape), reshape(y[1], new_shape))
+        new_shape = size(y[1])[1] * size(y[1])[2]
+        policy_loss = Flux.logitcrossentropy(reshape(y_policy, new_shape), reshape(y[1], new_shape))
         value_loss = Flux.mse(y_value, y[2])
         return policy_loss + value_loss
     end
-    println(typeof(X))
-    println(typeof(Y_policy))
-    println(typeof(Y_value))
-    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
-    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
-    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
-    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
-    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
-    println(loss(deepcopy(X), (deepcopy(Y_policy), deepcopy(Y_value))))
+    pre_training_loss = sum(loss(X, (Y_policy, Y_value)).data for (X, (Y_policy, Y_value)) in data) / length(data)
+    println("Training.       Pre-training loss: ", pre_training_loss)
     opt = ADAM()
-    pre_training_loss = nothing
-    post_training_loss = nothing
-    for epoch in 1:10
-        pre_training_loss = loss(X, (Y_policy, Y_value)).data
-        println("Training.       Pre-training loss: ", pre_training_loss)
-        Flux.train!(loss, params(model), [(X, (Y_policy, Y_value))], opt)
-        post_training_loss = loss(X, (Y_policy, Y_value)).data
-        println("Training Done. Post-training loss: ", post_training_loss)
-    end
+    Flux.train!(loss, params(model.conv_chain, model.policy_chain, model.value_chain), data, opt)
+    post_training_loss = sum(loss(X, (Y_policy, Y_value)).data for (X, (Y_policy, Y_value)) in data) / length(data)
+    println("Training Done. Post-training loss: ", post_training_loss)
     return (pre_training_loss, post_training_loss)
 end
 
