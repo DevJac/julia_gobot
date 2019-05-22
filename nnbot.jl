@@ -139,7 +139,7 @@ function genmove_intuition(bot::NNBot, board::Board, color::Color)
     best_move_policy_value = -99.9f0
     for i in eachindex(policy)
         move = P(i[1], i[2])
-        policy_value = policy[i]
+        policy_value = policy[i] + rand()
         if move in valid_move_set && policy_value > best_move_policy_value
             best_move_policy_value = policy_value
             best_move = move
@@ -191,7 +191,7 @@ function train(model, game_memories::Array{GameMemory})
     end
     pre_training_loss = sum(loss(X, (Y_policy, Y_value)).data for (X, (Y_policy, Y_value)) in data) / length(data)
     println("Training.       Pre-training loss: ", pre_training_loss)
-    opt = ADAM()
+    opt = Descent()
     Flux.train!(loss, params(model.conv_chain, model.policy_chain, model.value_chain), data, opt)
     post_training_loss = sum(loss(X, (Y_policy, Y_value)).data for (X, (Y_policy, Y_value)) in data) / length(data)
     println("Training Done. Post-training loss: ", post_training_loss)
@@ -236,7 +236,6 @@ function self_play(n)
     return pre_loss, post_loss
 end
 
-self_play(1)
 for _ in 1:10
     losses = self_play(10)
     open("loss.txt", "a") do file
