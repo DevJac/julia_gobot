@@ -107,7 +107,7 @@ mutable struct NNBot
     move_memory::Array{MoveMemory}
 end
 
-function NNBot(board_size::Int16)
+function NNBot(board_size)
     if isfile("model.bson")
         @load "model.bson" model
         NNBot(model, MoveMemory[])
