@@ -157,7 +157,7 @@ function report_winner(bot::NNBot, winning_color::Color)
 end
 
 function game_memories_to_data(model, game_memories::Array{GameMemory})::Array{Tuple{Array{Int8,4},Tuple{Array{Float32,2},Int8}},1}
-    @showprogress 1 "Training Prep" map(game_memories) do game_memory
+    @showprogress 1 "Training Prep " map(game_memories) do game_memory
         move_memory_length = length(game_memory.move_memory)
         for i in 1:move_memory_length
             move = game_memory.move_memory[i]
@@ -215,9 +215,9 @@ end
 
 function self_play(n)
     game_memories = GameMemory[]
-    bot = NNBot(Int16(9))
+    bot = NNBot(7)
     for game in 1:n
-        board = Board(9)
+        board = Board(7)
         print_board(board)
         game_memory = nothing
         while true
@@ -246,7 +246,7 @@ function self_play(n)
 end
 
 while true
-    loss = self_play(1)
+    loss = self_play(20)
     open("loss.txt", "a") do file
         println(file, loss)
     end
