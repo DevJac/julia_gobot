@@ -6,6 +6,7 @@ using Test: @test
 using Flux
 using BSON: @save, @load
 using ProgressMeter
+using Random
 
 b = Board(9)
 b[P(1, 1)] = Black
@@ -155,30 +156,37 @@ function report_winner(bot::NNBot, winning_color::Color)
     return game_memory
 end
 
-function train(model, game_memories::Array{GameMemory})
-    X = Array{Int8, 4}[]
-    Y_policy = Array{Float32, 2}[]
-    Y_value = Int8[]
-    @showprogress 1 "Training Prep " for game_memory in game_memories
+function game_memories_to_data(model, game_memories::Array{GameMemory})::Array{Tuple{Array{Int8,4},Tuple{Array{Float32,2},Int8}},1}
+    @showprogress 1 "Training Prep" map(game_memories) do game_memory
         move_memory_length = length(game_memory.move_memory)
         for i in 1:move_memory_length
             move = game_memory.move_memory[i]
             won = move.color == game_memory.winning_color
-            if i < move_memory_length
-                _, v = model(encode_board(game_memory.move_memory[i+1].board, move.color))
+            if i <= move_memory_length-2
+                next_move = game_memory.move_memory[i+2]
+                @assert move.color == next_move.color
+                # TODO: We encode boards twice or more. We should cache the encoded boards.
+                _, v = model(encode_board(next_move, move.color))
                 local next_move_value = v.data
             else
                 local next_move_value = won ? 1f0 : 0f0
             end
-            policy, value = model(encode_board(move.board, move.color))
+            encoded_board = encode_board(move.board, move.color)
+            policy, value = model(encoded_board)
             correct_policy = zeros(Float32, move.board.size, move.board.size)
             correct_policy[move.move] = (won ? 1f0 : -1f0) * abs(value.data - next_move_value)
-            push!(X, encode_board(move.board, move.color))
-            push!(Y_policy, correct_policy)
-            push!(Y_value, won ? Int8(1) : Int8(0))
+            x = encoded_board
+            y_policy = correct_policy
+            y_value = won ? Int8(1) : Int8(0)
+            return (x, (y_policy, y_value))
         end
     end
-    data = [(X[i], (Y_policy[i], Y_value[i])) for i in 1:length(X)]
+
+end
+
+function train(model, game_memories::Array{GameMemory})
+    data = game_memories_to_data(model, game_memories)
+    shuffle!(data)
     function loss(x, y)
         y_policy, y_value = model(x)
         new_shape = size(y[1])[1] * size(y[1])[2]
@@ -186,13 +194,15 @@ function train(model, game_memories::Array{GameMemory})
         value_loss = Flux.mse(y_value, y[2])
         return policy_loss + value_loss
     end
-    pre_training_loss = sum(loss(X, (Y_policy, Y_value)).data for (X, (Y_policy, Y_value)) in data) / length(data)
-    println("Training.       Pre-training loss: ", pre_training_loss)
+    batch_size = 1000
     opt = Descent()
-    Flux.train!(loss, params(model.conv_chain, model.policy_chain, model.value_chain), data, opt)
-    post_training_loss = sum(loss(X, (Y_policy, Y_value)).data for (X, (Y_policy, Y_value)) in data) / length(data)
-    println("Training Done. Post-training loss: ", post_training_loss)
-    return (pre_training_loss, post_training_loss)
+    for i in batch_size:batch_size:length(data)
+        batch = data[i-batch_size+1:i]
+        Flux.train!(loss, params(model.conv_chain, model.policy_chain, model.value_chain), batch, opt)
+        local batch_loss = sum(loss(x, (y_policy, y_value)).data for (x, (y_policy, y_value)) in batch) / length(batch)
+        println("Training. Loss: ", batch_loss)
+    end
+    return batch_loss
 end
 
 function save_model(model)
@@ -228,14 +238,14 @@ function self_play(n)
             print_board(board)
         end
     end
-    pre_loss, post_loss = train(bot.model, game_memories)
+    loss = train(bot.model, game_memories)
     save_model(bot.model)
-    return pre_loss, post_loss
+    return loss
 end
 
 while true
-    losses = self_play(20)
+    loss = self_play(1)
     open("loss.txt", "a") do file
-        println(file, losses)
+        println(file, loss)
     end
 end
