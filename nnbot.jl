@@ -217,11 +217,11 @@ end
 
 function self_play(n)
     game_memories = GameMemory[]
-    bot = NNBot(3)
+    bot = NNBot(5)
     optimizer = NADAM()
     while true
         for game in 1:n
-            board = Board(3)
+            board = Board(5)
             print_board(board)
             while true
                 # Black's move
