@@ -216,11 +216,11 @@ end
 
 function self_play(n)
     game_memories = GameMemory[]
-    bot = NNBot(7)
-    optimizer = ADADelta()
+    bot = NNBot(5)
+    optimizer = NADAM()
     while true
         for game in 1:n
-            board = Board(7)
+            board = Board(5)
             print_board(board)
             while true
                 # Black's move
@@ -242,7 +242,7 @@ function self_play(n)
                 print_board(board)
             end
         end
-        game_memories_limit = 60
+        game_memories_limit = 200
         game_memories = game_memories[max(1, end-(game_memories_limit-1)):end]
         @assert length(game_memories) <= game_memories_limit
         total_moves = sum(length(gm.move_memory) for gm in game_memories)
