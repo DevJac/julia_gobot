@@ -45,8 +45,8 @@ play(b, P(1, 1), Black)
 function create_model(board_size)
     board_size = Int64(board_size)
     # Individual layers
-    upper_network_size = 20
-    lower_network_size = 50
+    upper_network_size = 50
+    lower_network_size = 500
     conv1 = Conv((3, 3), encoded_board_channels=>upper_network_size, relu, pad=(1, 1))
     conv2 = Conv((3, 3), upper_network_size=>upper_network_size, relu, pad=(1, 1))
     conv3 = Conv((3, 3), upper_network_size=>upper_network_size, relu, pad=(1, 1))
