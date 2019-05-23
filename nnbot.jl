@@ -214,15 +214,14 @@ function save_model(model)
     mv(temp_name, "model.bson", force=true)
 end
 
-function self_play(n, limit=1_000_000)
+function self_play(n)
     game_memories = GameMemory[]
     bot = NNBot(7)
     optimizer = ADADelta()
-    for _ in 1:limit
+    while true
         for game in 1:n
             board = Board(7)
             print_board(board)
-            game_memory = nothing
             while true
                 # Black's move
                 resign, move = genmove_intuition(bot, board, Black)
@@ -257,5 +256,4 @@ function self_play(n, limit=1_000_000)
     end
 end
 
-self_play(1, 1)
 self_play(20)
