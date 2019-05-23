@@ -217,9 +217,9 @@ end
 function self_play(n)
     board_size = 7
     game_memories = GameMemory[]
-    bot = NNBot(board_size)
     optimizer = NADAM()
     while true
+        bot = NNBot(board_size)
         for game in 1:n
             board = Board(board_size)
             print_board(board)
