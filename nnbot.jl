@@ -189,13 +189,12 @@ end
 function train(model, opt, game_memories::Array{GameMemory})
     data = game_memories_to_data(model, game_memories)
     shuffle!(data)
-    board_size = game_memories[1].move_memory[1].board.size
     function loss(x, y)
         y_policy, y_value = model(x)
         new_shape = size(y[1])[1] * size(y[1])[2]
         policy_loss = Flux.mse(reshape(y_policy, new_shape), reshape(y[1], new_shape))
         value_loss = Flux.mse(y_value, y[2])
-        return (policy_loss / board_size^2) + value_loss
+        return policy_loss + value_loss
     end
     batch_size = 1000
     total_loss = 0.0
