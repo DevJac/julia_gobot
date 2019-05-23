@@ -17,36 +17,37 @@ function uid()
     join(rand("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in 1:6)
 end
 
+const encoded_board_channels = 9
+
 function encode_board(board::Board, color::Color)::Array{Int8, 4}
     valid_move_set = Set(valid_moves(board, color))
-    t = zeros(Int8, board.size, board.size, 11, 1)
+    t = zeros(Int8, board.size, board.size, encoded_board_channels, 1)
     for p in points(board)
-        t[p.x, p.y, 1] = board[p] == Black && liberties(board, p) == 1
-        t[p.x, p.y, 2] = board[p] == Black && liberties(board, p) == 2
-        t[p.x, p.y, 3] = board[p] == Black && liberties(board, p) == 3
-        t[p.x, p.y, 4] = board[p] == Black && liberties(board, p) > 3
-        t[p.x, p.y, 5] = board[p] == White && liberties(board, p) == 1
-        t[p.x, p.y, 6] = board[p] == White && liberties(board, p) == 2
-        t[p.x, p.y, 7] = board[p] == White && liberties(board, p) == 3
-        t[p.x, p.y, 8] = board[p] == White && liberties(board, p) > 3
-        t[p.x, p.y, 9] = color == Black
-        t[p.x, p.y, 10] = color == White
-        t[p.x, p.y, 11] = p in valid_move_set
+        t[p.x, p.y, 1] = board[p] == color
+        t[p.x, p.y, 2] = board[p] == color && liberties(board, p) == 1
+        t[p.x, p.y, 3] = board[p] == color && liberties(board, p) == 2
+        t[p.x, p.y, 4] = board[p] == color && liberties(board, p) > 2
+        t[p.x, p.y, 5] = board[p] == other(color)
+        t[p.x, p.y, 6] = board[p] == other(color) && liberties(board, p) == 1
+        t[p.x, p.y, 7] = board[p] == other(color) && liberties(board, p) == 2
+        t[p.x, p.y, 8] = board[p] == other(color) && liberties(board, p) > 2
+        t[p.x, p.y, 9] = p in valid_move_set
     end
     return t
 end
 
 b = Board(9)
 play(b, P(1, 1), Black)
-@test encode_board(b, Black)[1, 1, 2] == 1
-@test encode_board(b, Black)[1, 1, 3] == 0
+@test encode_board(b, Black)[1, 1, 1] == 1
+@test encode_board(b, Black)[1, 1, 2] == 0
+@test encode_board(b, Black)[1, 1, 3] == 1
 
 function create_model(board_size)
     board_size = Int64(board_size)
     # Individual layers
-    upper_network_size = 40
-    lower_network_size = 200
-    conv1 = Conv((3, 3), 11=>upper_network_size, relu, pad=(1, 1))
+    upper_network_size = 20
+    lower_network_size = 50
+    conv1 = Conv((3, 3), encoded_board_channels=>upper_network_size, relu, pad=(1, 1))
     conv2 = Conv((3, 3), upper_network_size=>upper_network_size, relu, pad=(1, 1))
     conv3 = Conv((3, 3), upper_network_size=>upper_network_size, relu, pad=(1, 1))
     conv4 = Conv((3, 3), upper_network_size=>upper_network_size, relu, pad=(1, 1))
@@ -81,10 +82,10 @@ function create_model(board_size)
     end
 end
 
-b = Board(25)
+b = Board(3)
 m = create_model(b.size)
 encoded_board = encode_board(b, Black)
-@test size(encoded_board) == (b.size, b.size, 11, 1)
+@test size(encoded_board) == (b.size, b.size, encoded_board_channels, 1)
 y_policy, y_value = m(encoded_board)
 @test size(y_policy) == (b.size, b.size)
 @test size(y_value) == ()
@@ -216,11 +217,11 @@ end
 
 function self_play(n)
     game_memories = GameMemory[]
-    bot = NNBot(5)
+    bot = NNBot(3)
     optimizer = NADAM()
     while true
         for game in 1:n
-            board = Board(5)
+            board = Board(3)
             print_board(board)
             while true
                 # Black's move
@@ -251,7 +252,7 @@ function self_play(n)
         loss = train(bot.model, optimizer, game_memories)
         save_model(bot.model)
         open("loss.txt", "a") do file
-            println(file, (average_game_length, loss))
+            println(file, (length(game_memories), average_game_length, loss))
         end
     end
 end
