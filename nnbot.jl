@@ -215,12 +215,13 @@ function save_model(model)
 end
 
 function self_play(n)
+    board_size = 7
     game_memories = GameMemory[]
-    bot = NNBot(7)
+    bot = NNBot(board_size)
     optimizer = NADAM()
     while true
         for game in 1:n
-            board = Board(7)
+            board = Board(board_size)
             print_board(board)
             while true
                 # Black's move
