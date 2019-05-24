@@ -203,6 +203,7 @@ function train(model, opt, game_memories::Array{GameMemory})
         batch = data[i:min(i+(batch_size-1), data_length)]
         Flux.train!(loss, params(model.conv_chain, model.policy_chain, model.value_chain), batch, opt)
         batch_loss = sum(loss(x, (y_policy, y_value)).data for (x, (y_policy, y_value)) in batch)
+        println("Batch loss: ", batch_loss)
         total_loss += batch_loss
     end
     return total_loss / data_length
