@@ -19,9 +19,11 @@ function other(color::Color)
     end
 end
 
-@test other(Empty) == Empty
-@test other(Black) == White
-@test other(White) == Black
+function test_other()
+    @test other(Empty) == Empty
+    @test other(Black) == White
+    @test other(White) == Black
+end
 
 struct Point
     x::Int8
@@ -53,9 +55,11 @@ function with_neighbors(p::Point)
     ]
 end
 
-@test Point(1, 2) + Point(4, -1) == Point(5, 1)
-@test P(1, 2) + P(4, -2) == P(5, 0)
-@test Set(neighbors(P(0, 0))) == Set([P(0, 1), P(1, 0), P(0, -1), P(-1, 0)])
+function test_point()
+    @test Point(1, 2) + Point(4, -1) == Point(5, 1)
+    @test P(1, 2) + P(4, -2) == P(5, 0)
+    @test Set(neighbors(P(0, 0))) == Set([P(0, 1), P(1, 0), P(0, -1), P(-1, 0)])
+end
 
 mutable struct Board
     size::Int8
@@ -142,21 +146,23 @@ function update_liberties(board::Board, points)
     end
 end
 
-b = Board(9)
-@test b[P(1, 1)] == Empty
-b[P(1, 1)] = Black
-@test b[P(1, 1)] == Black
+function test_board_liberties()
+    b = Board(9)
+    @test b[P(1, 1)] == Empty
+    b[P(1, 1)] = Black
+    @test b[P(1, 1)] == Black
 
-b = Board(9)
-@test liberties(b, P(1, 1)) == 0
-@test liberties(b, P(1, 2)) == 0
-b[P(1, 1)] = Black
-@test liberties(b, P(1, 1)) == 2
-@test liberties(b, P(1, 2)) == 0
-b[P(1, 2)] = Black
-@test liberties(b, P(1, 1)) == 3
-@test liberties(b, P(1, 2)) == 3
-@test liberties(b, P(1, 3)) == 0
+    b = Board(9)
+    @test liberties(b, P(1, 1)) == 0
+    @test liberties(b, P(1, 2)) == 0
+    b[P(1, 1)] = Black
+    @test liberties(b, P(1, 1)) == 2
+    @test liberties(b, P(1, 2)) == 0
+    b[P(1, 2)] = Black
+    @test liberties(b, P(1, 1)) == 3
+    @test liberties(b, P(1, 2)) == 3
+    @test liberties(b, P(1, 3)) == 0
+end
 
 function remove_stones_without_liberties(board::Board, color_to_remove::Color)
     points_removed = Point[]
@@ -256,54 +262,65 @@ function print_board_history(board::Board)
     end
 end
 
-# Fill board
-b = Board(9)
-for p in points(b)
-    b[p] = Black
+function test_board_play()
+    # Fill board
+    b = Board(9)
+    for p in points(b)
+        b[p] = Black
+    end
+    @test b[P(1, 1)] == Black
+    @test b[P(9, 9)] == Black
+    @test b[P(5, 5)] == Black
+    @test valid_moves(b, Black) == []
+    @test valid_moves(b, White) == []
+
+    # Atari placement
+    b = Board(9)
+    b[P(1, 1)] = Black
+    b[P(2, 2)] = Black
+    @test P(1, 2) in valid_moves(b, Black)
+    @test P(1, 2) in valid_moves(b, White)
+    play(b, P(1, 2), White)
+    @test liberties(b, P(1, 2)) == 1
+
+    # Ko
+    b = Board(9)
+    b[P(2, 1)] = Black
+    b[P(1, 2)] = Black
+    b[P(2, 3)] = Black
+    b[P(3, 1)] = White
+    b[P(4, 2)] = White
+    b[P(3, 3)] = White
+    @test P(3, 2) in valid_moves(b, Black)
+    @test P(3, 2) in valid_moves(b, White)
+    play(b, P(3, 2), Black)
+    @test P(2, 2) in valid_moves(b, Black)
+    @test P(2, 2) in valid_moves(b, White)
+    @test b[P(3, 2)] == Black
+    play(b, P(2, 2), White)
+    @test b[P(3, 2)] == Empty
+    @test liberties(b, P(2, 2)) == 1
+    @test ko(b, P(3, 2), Black)
+    @test !(P(3, 2) in valid_moves(b, Black))
+
+    # Multiple captured stones
+    b = Board(5)
+    b[P(1, 1)] = Black
+    b[P(2, 1)] = White
+    b[P(1, 2)] = Black
+    b[P(2, 2)] = White
+    play(b, P(1, 3), White)
+    @test b[P(1, 1)] == Empty
+    @test b[P(1, 2)] == Empty
 end
-@test b[P(1, 1)] == Black
-@test b[P(9, 9)] == Black
-@test b[P(5, 5)] == Black
-@test valid_moves(b, Black) == []
-@test valid_moves(b, White) == []
 
-# Atari placement
-b = Board(9)
-b[P(1, 1)] = Black
-b[P(2, 2)] = Black
-@test P(1, 2) in valid_moves(b, Black)
-@test P(1, 2) in valid_moves(b, White)
-play(b, P(1, 2), White)
-@test liberties(b, P(1, 2)) == 1
+function test_all()
+    test_other()
+    test_point()
+    test_board_liberties()
+    test_board_play()
+end
 
-# Ko
-b = Board(9)
-b[P(2, 1)] = Black
-b[P(1, 2)] = Black
-b[P(2, 3)] = Black
-b[P(3, 1)] = White
-b[P(4, 2)] = White
-b[P(3, 3)] = White
-@test P(3, 2) in valid_moves(b, Black)
-@test P(3, 2) in valid_moves(b, White)
-play(b, P(3, 2), Black)
-@test P(2, 2) in valid_moves(b, Black)
-@test P(2, 2) in valid_moves(b, White)
-@test b[P(3, 2)] == Black
-play(b, P(2, 2), White)
-@test b[P(3, 2)] == Empty
-@test liberties(b, P(2, 2)) == 1
-@test ko(b, P(3, 2), Black)
-@test !(P(3, 2) in valid_moves(b, Black))
-
-# Multiple captured stones
-b = Board(5)
-b[P(1, 1)] = Black
-b[P(2, 1)] = White
-b[P(1, 2)] = Black
-b[P(2, 2)] = White
-play(b, P(1, 3), White)
-@test b[P(1, 1)] == Empty
-@test b[P(1, 2)] == Empty
+test_all()
 
 end
