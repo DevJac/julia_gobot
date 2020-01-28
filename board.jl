@@ -255,7 +255,7 @@ function print_board(board::Board)
     for x in Int8(1):board.size
         out *= @sprintf("%2d", x % 10)
     end
-    print(out)
+    println(out)
 end
 
 function print_board_history(board::Board)
