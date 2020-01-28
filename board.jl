@@ -5,6 +5,7 @@ export Point, P, other, neighbors, with_neighbors
 export Board, liberties, on_board, off_board, points, valid_moves, play
 export print_board, print_board_history
 
+using Printf
 using Test: @test
 
 @enum Color::Int8 Empty Black White
@@ -242,15 +243,18 @@ function print_board(board::Board)
             return '●'
         end
     end
-    out = "-" * repeat("-", board.size*2) * "--\n"
+    out = "   -" * repeat("-", board.size*2) * "--\n"
     for y in board.size:Int8(-1):1
-        out *= "|"
+        out *= @sprintf("%2d |", y)
         for x in Int8(1):board.size
             out *= " " * prettify(board[P(x, y)])
         end
         out *= " |\n"
     end
-    out *= "-" * repeat("-", board.size*2) * "--\n"
+    out *= "   -" * repeat("-", board.size*2) * "--\n    "
+    for x in Int8(1):board.size
+        out *= @sprintf("%2d", x % 10)
+    end
     print(out)
 end
 
