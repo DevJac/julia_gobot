@@ -6,52 +6,24 @@ export Color, Empty, Black, White
 export Point, P, other, neighbors, with_neighbors
 export Board, liberties, on_board, off_board, points, valid_moves, play
 export print_board, print_board_history
-export BoardTree, deepen_tree, best_move, self_play
+export BoardTree, rollout, best_move, self_play
 
 using .BoardModule
 
+using Printf
+using Random
 using Test: @test
 
 mutable struct BoardTree
     board::Board
     player::Color
-    value::Int16
+    black_wins::Int32
+    white_wins::Int32
     move::Dict{Point, BoardTree}
 end
 
 function BoardTree(board::Board, player::Color)
-    BoardTree(board, player, eval_board(board, player), Dict{Point, BoardTree}())
-end
-
-function eval_board(board::Board, player::Color)
-    val = sum(points(board)) do p
-        if board[p] == player
-            return liberties(board, p)
-        elseif board[p] == other(player)
-            return -liberties(board, p)
-        else
-            return 0
-        end
-    end
-    Int16(val)
-end
-
-function test_eval_board()
-    b = Board(9)
-    @test eval_board(b, Black) == 0
-    @test eval_board(b, White) == 0
-    b[P(1, 1)] = Black
-    @test eval_board(b, Black) == 2
-    @test eval_board(b, White) == -2
-    b[P(1, 2)] = White
-    @test eval_board(b, Black) == -1
-    @test eval_board(b, White) == 1
-    b[P(1, 3)] = Black
-    @test eval_board(b, Black) == 2
-    @test eval_board(b, White) == -2
-    b[P(1, 4)] = Black
-    @test eval_board(b, Black) == 6
-    @test eval_board(b, White) == -6
+    BoardTree(board, player, 0, 0, Dict{Point, BoardTree}())
 end
 
 function Base.length(tree::BoardTree)
@@ -61,64 +33,96 @@ function Base.length(tree::BoardTree)
     1 + sum(length(subtree) for subtree in values(tree.move))
 end
 
-function deepen_tree(tree::BoardTree)
+function rollout_with_random_moves(tree::BoardTree, valid_moves)
+    rand(valid_moves)
+end
+
+function rollout_with_uct_moves(tree::BoardTree, valid_moves)
+    c = 1.5
+    shuffle!(valid_moves)
+    N = if length(tree.move) == 0
+        0
+    else
+        sum(values(tree.move)) do t
+            t.black_wins + t.white_wins
+        end
+    end
+    valid_moves_ucs = map(valid_moves) do p
+        if !haskey(tree.move, p)
+            Inf
+        else
+            t = tree.move[p]
+            n = t.black_wins + t.white_wins
+            w = tree.player == Black ? t.black_wins / n : t.white_wins / n
+            w + c * sqrt(log(N) / n)
+        end
+    end
+    valid_moves[argmax(valid_moves_ucs)]
+end
+
+function rollout(tree::BoardTree, move_selection=rollout_with_uct_moves)
     vms = valid_moves(tree.board, tree.player)
     if length(vms) == 0
-        return tree.value
+        winner = other(tree.player)
+        if winner == Black
+            tree.black_wins += 1
+        else
+            tree.white_wins += 1
+        end
+        return winner
     end
-    random_move = rand(vms)
-    if haskey(tree.move, random_move)
-        deepen_tree(tree.move[random_move])
-    else
+    selected_move = move_selection(tree, vms)
+    if !haskey(tree.move, selected_move)
         next_board = deepcopy(tree.board)
-        play(next_board, random_move, tree.player)
-        next_board_tree = BoardTree(next_board, other(tree.player))
-        tree.move[random_move] = next_board_tree
+        play(next_board, selected_move, tree.player)
+        tree.move[selected_move] = BoardTree(next_board, other(tree.player))
     end
-    tree.value = minimum(-t.value for t in values(tree.move))
+    rollout_winner = rollout(tree.move[selected_move], rollout_with_random_moves)
+    if rollout_winner == Black
+        tree.black_wins += 1
+    else
+        tree.white_wins += 1
+    end
+    rollout_winner
 end
 
 function best_move(tree::BoardTree)
-    best_value = minimum(t.value for t in values(tree.move))
-    best_moves = filter(p -> tree.move[p].value == best_value, keys(tree.move))
-    rand(best_moves)
+    moves = collect(tree.move)
+    visit_count = [t.black_wins + t.white_wins for (_, t) in moves]
+    r = moves[argmax(visit_count)]
+    @info "Best move rollouts" r.second.black_wins r.second.white_wins
+    r.first
 end
 
 function test_board_tree()
     b = Board(2)
     t = BoardTree(b, Black)
     @test length(t) == 1
-    deepen_tree(t)
-    @test length(t) == 2
-    deepen_tree(t)
-    @test length(t) == 3
-    for _ in 1:100
-        deepen_tree(t)
-    end
-    @test length(t) > 3
+    rollout(t)
+    @test length(t) > 1
     @test best_move(t) in valid_moves(b, Black)
 end
 
 function self_play()
-    board = Board(9)
+    board = Board(5)
     current_player = Black
     board_tree = BoardTree(board, current_player)
     while length(valid_moves(board, current_player)) > 0
         start_time = time()
         while time() - start_time < 6
-            deepen_tree(board_tree)
+            rollout(board_tree)
         end
+        @printf("%s move\n", current_player)
         board_tree = board_tree.move[best_move(board_tree)]
         board = board_tree.board
         current_player = other(current_player)
         @assert board_tree.player == current_player
         print_board(board)
-        println(length(board_tree))
+        @printf("Tree size: %d\n\n", length(board_tree))
     end
 end
 
 function test_all()
-    test_eval_board()
     test_board_tree()
 end
 
