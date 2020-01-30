@@ -3,7 +3,7 @@ module BoardModule
 export Color, Empty, Black, White
 export Point, P, other, neighbors, with_neighbors
 export Board, liberties, on_board, off_board, points, valid_moves, play
-export print_board, print_board_history
+export print_board
 
 using Printf
 using Test: @test
@@ -60,17 +60,19 @@ function test_point()
     @test Point(1, 2) + Point(4, -1) == Point(5, 1)
     @test P(1, 2) + P(4, -2) == P(5, 0)
     @test Set(neighbors(P(0, 0))) == Set([P(0, 1), P(1, 0), P(0, -1), P(-1, 0)])
+    @test Set(with_neighbors(P(0, 0))) == Set([P(0, 0), P(0, 1), P(1, 0), P(0, -1), P(-1, 0)])
 end
 
 mutable struct Board
     size::Int8
     positions::Array{Color}
     liberties::Array{Int16}
-    history::Set{Array{Color}}
+    last_positions::Array{Color}
 end
 
 function Board(size)
-    Board(size, fill(Empty, (size, size)), fill(0, (size, size)), Set())
+    positions = fill(Empty, (size, size))
+    Board(size, positions, fill(0, (size, size)), deepcopy(positions))
 end
 
 function Base.getindex(a::AbstractArray, point::Point)
@@ -215,7 +217,7 @@ function ko(board::Board, point::Point, color::Color)
     end
     future_board = deepcopy(board)
     play(future_board, point, color)
-    return future_board.positions in board.history
+    return future_board.positions == board.last_positions
 end
 
 function valid_moves(board::Board, color::Color)
@@ -226,8 +228,8 @@ end
 
 function play(board::Board, point::Point, color::Color)
     @assert board[point] == Empty
-    push!(board.history, deepcopy(board.positions))
-    @assert board.positions in board.history
+    board.last_positions = deepcopy(board.positions)
+    @assert board.positions == board.last_positions
     board[point] = color
     update_liberties(board, with_neighbors(point))
     remove_stones_without_liberties(board, other(color))
@@ -256,14 +258,6 @@ function print_board(board::Board)
         out *= @sprintf("%2d", x % 10)
     end
     println(out)
-end
-
-function print_board_history(board::Board)
-    for positions in board.history
-        b = Board(board.size)
-        b.positions = positions
-        print_board(b)
-    end
 end
 
 function test_board_play()
