@@ -112,7 +112,7 @@ function self_play()
         while time() - start_time < 6
             rollout(board_tree)
         end
-        @printf("%s move\n", current_player)
+        @printf("%s's move\n", current_player)
         board_tree = board_tree.move[best_move(board_tree)]
         board = board_tree.board
         current_player = other(current_player)
