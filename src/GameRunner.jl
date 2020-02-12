@@ -3,10 +3,10 @@ module GameRunner
 export play_game
 
 module RandomPlayerM
-    export RandomPlayer, move
-    using BoardM
-    struct RandomPlayer; end
-    move(player::RandomPlayer, board, current_player) = rand(valid_moves(board, current_player))
+export RandomPlayer, move
+using BoardM
+struct RandomPlayer; end
+move(player::RandomPlayer, board, current_player) = rand(valid_moves(board, current_player))
 end
 
 using BoardM
@@ -26,7 +26,7 @@ struct GameRecord
     winner :: Color
 end
 
-function play_game(p1, p2; board_size=19)
+function play_game(p1, p2; board_size=19, quiet=false)
     players = Dict{Color, Any}()
     players[Black], players[White] = shuffle([p1, p2])
     game_states = GameState[]
@@ -36,12 +36,14 @@ function play_game(p1, p2; board_size=19)
         m = move(players[current_player], board, current_player)
         push!(game_states, GameState(deepcopy(board), current_player, m))
         play(board, m, current_player)
-        @printf("%s's (%s) move: (%d, %d)\n", current_player, players[current_player], m.x, m.y)
-        print_board(board)
+        if !quiet
+            @printf("%s's (%s) move: (%d, %d)\n", current_player, players[current_player], m.x, m.y)
+            print_board(board)
+        end
         current_player = other(current_player)
     end
     winner = other(current_player)
-    @printf("%s wins\n", winner)
+    !quiet && @printf("%s wins\n", winner)
     GameRecord(game_states, winner)
 end
 
