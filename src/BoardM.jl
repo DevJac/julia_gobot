@@ -1,4 +1,4 @@
-module BoardModule
+module BoardM
 
 export Color, Empty, Black, White
 export Point, P, other, neighbors, with_neighbors

@@ -1,12 +1,16 @@
-module Game
+module GameRunner
 
 export play_game
 
-include("board.jl")
-include("randbot.jl")
+module RandomPlayerM
+    export RandomPlayer, move
+    using BoardM
+    struct RandomPlayer; end
+    move(player::RandomPlayer, board, current_player) = rand(valid_moves(board, current_player))
+end
 
-using .BoardModule
-using .RandomPlayerModule
+using BoardM
+using .RandomPlayerM
 
 using Printf
 using Random
@@ -32,7 +36,7 @@ function play_game(p1, p2; board_size=19)
         m = move(players[current_player], board, current_player)
         push!(game_states, GameState(deepcopy(board), current_player, m))
         play(board, m, current_player)
-        @printf("%s's (%s) move: %s\n", current_player, players[current_player], m)
+        @printf("%s's (%s) move: (%d, %d)\n", current_player, players[current_player], m.x, m.y)
         print_board(board)
         current_player = other(current_player)
     end
@@ -42,7 +46,7 @@ function play_game(p1, p2; board_size=19)
 end
 
 function test_all()
-    play_game(RandomPlayer(), RandomPlayer())
+    play_game(RandomPlayer(), RandomPlayer(), board_size=9)
 end
 
 end # module
