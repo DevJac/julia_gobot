@@ -1,12 +1,12 @@
 module MCBot
 
-include("board.jl")
-
 export Color, Empty, Black, White
 export Point, P, other, neighbors, with_neighbors
 export Board, liberties, on_board, off_board, points, valid_moves, play
 export print_board, print_board_history
 export BoardTree, rollout, best_move, self_play
+
+include("board.jl")
 
 using .BoardModule
 
@@ -128,4 +128,4 @@ end
 
 test_all()
 
-end
+end # module
