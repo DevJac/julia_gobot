@@ -1,12 +1,13 @@
 using GameRunner
 using JLD
+using MCPlayerM
 using Printf
 using ProgressMeter
 using Serialization
 
 @showprogress 1 "Playing games..." for i in 1:parse(Int, ARGS[1])
     game_record = play_game(
-        GameRunner.RandomPlayerM.RandomPlayer(),
+        MCPlayer(),
         GameRunner.RandomPlayerM.RandomPlayer(),
         board_size=9,
         quiet=true)

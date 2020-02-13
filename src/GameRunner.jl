@@ -1,6 +1,6 @@
 module GameRunner
 
-export play_game
+export play_game, move
 
 module RandomPlayerM
 export RandomPlayer, move
@@ -34,6 +34,7 @@ function play_game(p1, p2; board_size=19, quiet=false)
     current_player = Black
     while length(valid_moves(board, current_player)) > 0
         m = move(players[current_player], board, current_player)
+        @assert m in valid_moves(board, current_player)
         push!(game_states, GameState(deepcopy(board), current_player, m))
         play(board, m, current_player)
         if !quiet

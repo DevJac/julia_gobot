@@ -1,15 +1,9 @@
-module MCBot
+module MCPlayerM
 
-export Color, Empty, Black, White
-export Point, P, other, neighbors, with_neighbors
-export Board, liberties, on_board, off_board, points, valid_moves, play
-export print_board, print_board_history
-export BoardTree, rollout, best_move, self_play
+export MCPlayer, move
 
-include("board.jl")
-
-using .BoardModule
-
+using BoardM
+import GameRunner: move
 using Printf
 using Random
 using Test: @test
@@ -90,7 +84,6 @@ function best_move(tree::BoardTree)
     moves = collect(tree.move)
     visit_count = [t.black_wins + t.white_wins for (_, t) in moves]
     r = moves[argmax(visit_count)]
-    @info "Best move rollouts" r.second.black_wins r.second.white_wins
     r.first
 end
 
@@ -122,10 +115,43 @@ function self_play()
     end
 end
 
+mutable struct MCPlayer
+    board_tree :: Union{Nothing, BoardTree}
+end
+
+MCPlayer() = MCPlayer(nothing)
+
+function Base.show(io::IO, player::MCPlayer)
+    @printf(io, "MCPlayer(%d)", length(player.board_tree))
+end
+
+function advance_tree_to_opponents_move(player, board, current_player)
+    if isnothing(player.board_tree)
+        player.board_tree = BoardTree(board, current_player)
+        return
+    end
+    for bt in values(player.board_tree.move)
+        if bt.board.positions == board.positions && bt.player == current_player
+            player.board_tree = bt
+            return
+        end
+    end
+    player.board_tree = BoardTree(board, current_player)
+end
+
+function move(player::MCPlayer, board, current_player)
+    advance_tree_to_opponents_move(player, board, current_player)
+    start_time = time()
+    while time() - start_time < 6
+        rollout(player.board_tree)
+    end
+    m = best_move(player.board_tree)
+    player.board_tree = player.board_tree.move[m]
+    m
+end
+
 function test_all()
     test_board_tree()
 end
-
-test_all()
 
 end # module
