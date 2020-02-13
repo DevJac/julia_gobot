@@ -71,7 +71,9 @@ function rollout(tree::BoardTree, move_selection=rollout_with_uct_moves)
         play(next_board, selected_move, tree.player)
         tree.move[selected_move] = BoardTree(next_board, other(tree.player))
     end
-    rollout_winner = rollout(tree.move[selected_move], rollout_with_random_moves)
+    next_board_total_rollouts = tree.move[selected_move].black_wins + tree.move[selected_move].white_wins
+    rollout_method = next_board_total_rollouts >= 10 ? move_selection : rollout_with_random_moves
+    rollout_winner = rollout(tree.move[selected_move], move_selection)
     if rollout_winner == Black
         tree.black_wins += 1
     else
