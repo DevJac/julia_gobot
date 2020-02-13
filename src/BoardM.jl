@@ -65,9 +65,9 @@ end
 
 mutable struct Board
     size::Int8
-    positions::Array{Color}
-    liberties::Array{Int16}
-    last_positions::Array{Color}
+    positions::Array{Color, 2}
+    liberties::Array{Int16, 2}
+    last_positions::Array{Color, 2}
 end
 
 function Board(size)
