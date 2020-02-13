@@ -55,29 +55,38 @@ function rollout_with_uct_moves(tree::BoardTree, valid_moves)
 end
 
 function rollout(tree::BoardTree, move_selection=rollout_with_uct_moves)
-    vms = valid_moves(tree.board, tree.player)
-    if length(vms) == 0
-        winner = other(tree.player)
-        if winner == Black
+    stack = Tuple{BoardTree, typeof(rollout_with_uct_moves)}[(tree, move_selection)]
+    function rollout′()
+        while true
+            tree, move_selection = stack[end]
+            vms = valid_moves(tree.board, tree.player)
+            if length(vms) == 0
+                winner = other(tree.player)
+                if winner == Black
+                    tree.black_wins += 1
+                else
+                    tree.white_wins += 1
+                end
+                return winner
+            end
+            selected_move = move_selection(tree, vms)
+            if !haskey(tree.move, selected_move)
+                next_board = deepcopy(tree.board)
+                play(next_board, selected_move, tree.player)
+                tree.move[selected_move] = BoardTree(next_board, other(tree.player))
+            end
+            next_board_total_rollouts = tree.move[selected_move].black_wins + tree.move[selected_move].white_wins
+            rollout_method = next_board_total_rollouts >= 10 ? move_selection : rollout_with_random_moves
+            push!(stack, (tree.move[selected_move], move_selection))
+        end
+    end
+    rollout_winner = rollout′()
+    for (tree, _) in stack
+        if rollout_winner == Black
             tree.black_wins += 1
         else
             tree.white_wins += 1
         end
-        return winner
-    end
-    selected_move = move_selection(tree, vms)
-    if !haskey(tree.move, selected_move)
-        next_board = deepcopy(tree.board)
-        play(next_board, selected_move, tree.player)
-        tree.move[selected_move] = BoardTree(next_board, other(tree.player))
-    end
-    next_board_total_rollouts = tree.move[selected_move].black_wins + tree.move[selected_move].white_wins
-    rollout_method = next_board_total_rollouts >= 10 ? move_selection : rollout_with_random_moves
-    rollout_winner = rollout(tree.move[selected_move], move_selection)
-    if rollout_winner == Black
-        tree.black_wins += 1
-    else
-        tree.white_wins += 1
     end
     rollout_winner
 end
