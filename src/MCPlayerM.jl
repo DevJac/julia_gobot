@@ -117,10 +117,11 @@ end
 
 mutable struct MCPlayer
     think_time :: Float32
+    give_up :: Float32
     board_tree :: Union{Nothing, BoardTree}
 end
 
-MCPlayer(think_time=15) = MCPlayer(think_time, nothing)
+MCPlayer(think_time=15, give_up=0.25) = MCPlayer(think_time, give_up, nothing)
 
 function Base.show(io::IO, player::MCPlayer)
     @printf(io, "MCPlayer(%d)", length(player.board_tree))
@@ -147,7 +148,13 @@ function move(player::MCPlayer, board, current_player)
         rollout(player.board_tree)
     end
     m = best_move(player.board_tree)
-    player.board_tree = player.board_tree.move[m]
+    bt = player.board_tree.move[m]
+    won_rollouts = current_player == Black ? bt.black_wins : bt.white_wins
+    total_rollouts = bt.black_wins + bt.white_wins
+    if total_rollouts >= 100 && won_rollouts / total_rollouts < player.give_up
+        return P(0, 0)
+    end
+    player.board_tree = bt
     m
 end
 
