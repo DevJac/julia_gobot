@@ -116,10 +116,11 @@ function self_play()
 end
 
 mutable struct MCPlayer
+    think_time :: Float32
     board_tree :: Union{Nothing, BoardTree}
 end
 
-MCPlayer() = MCPlayer(nothing)
+MCPlayer(think_time=15) = MCPlayer(think_time, nothing)
 
 function Base.show(io::IO, player::MCPlayer)
     @printf(io, "MCPlayer(%d)", length(player.board_tree))
@@ -142,7 +143,7 @@ end
 function move(player::MCPlayer, board, current_player)
     advance_tree_to_opponents_move(player, board, current_player)
     start_time = time()
-    while time() - start_time < 6
+    while time() - start_time < player.think_time
         rollout(player.board_tree)
     end
     m = best_move(player.board_tree)
