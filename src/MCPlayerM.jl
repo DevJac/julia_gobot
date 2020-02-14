@@ -55,11 +55,11 @@ function rollout_with_uct_moves(tree::BoardTree, valid_moves)
 end
 
 function rollout(tree::BoardTree, move_selection=rollout_with_uct_moves)
+    cycle_limit = tree.board.size^2 * 2
     stack = Tuple{BoardTree, typeof(rollout_with_uct_moves)}[(tree, move_selection)]
     function rollout′()
         while true
-            if length(stack) >= 1000
-                @assert length(stack) == 1000
+            if length(stack) > cycle_limit
                 return rand([Black, White])
             end
             tree, move_selection = stack[end]
