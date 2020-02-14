@@ -231,7 +231,6 @@ function play(board::Board, point::Point, color::Color)
     board.last_positions = deepcopy(board.positions)
     @assert board.positions == board.last_positions
     board[point] = color
-    update_liberties(board, with_neighbors(point))
     remove_stones_without_liberties(board, other(color))
 end
 
