@@ -58,6 +58,10 @@ function rollout(tree::BoardTree, move_selection=rollout_with_uct_moves)
     stack = Tuple{BoardTree, typeof(rollout_with_uct_moves)}[(tree, move_selection)]
     function rollout′()
         while true
+            if length(stack) >= 1000
+                @assert length(stack) == 1000
+                return rand([Black, White])
+            end
             tree, move_selection = stack[end]
             vms = valid_moves(tree.board, tree.player)
             if length(vms) == 0
