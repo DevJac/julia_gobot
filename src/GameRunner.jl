@@ -34,12 +34,12 @@ function play_game(p1, p2; board_size=19, quiet=false)
     current_player = Black
     while length(valid_moves(board, current_player)) > 0
         m = move(players[current_player], board, current_player)
+        @assert m == P(0, 0) || m in valid_moves(board, current_player)
+        push!(game_states, GameState(deepcopy(board), current_player, m))
         if m == P(0, 0)
             !quiet && @printf("%s resigns\n", current_player)
             break
         end
-        @assert m in valid_moves(board, current_player)
-        push!(game_states, GameState(deepcopy(board), current_player, m))
         play(board, m, current_player)
         if !quiet
             @printf("%s's (%s) move: (%d, %d)\n", current_player, players[current_player], m.x, m.y)
