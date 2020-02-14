@@ -1,6 +1,7 @@
 module GameRunner
 
-export play_game, move
+export play_game, replay_game
+export move
 
 module RandomPlayerM
 export RandomPlayer, move
@@ -51,6 +52,22 @@ function play_game(p1, p2; board_size=19, quiet=false)
     winner = other(current_player)
     !quiet && @printf("%s wins\n", winner)
     GameRecord(game_states, winner)
+end
+
+function replay_game(game_record)
+    pmove(move) = move == P(0, 0) ? "resign" : @sprintf("(%d, %d)", move.x, move.y)
+    for game_state in game_record.states
+        print_board(game_state.board)
+        @printf("%s's move: %s\n", game_state.player, pmove(game_state.move))
+        next_board = deepcopy(game_state.board)
+        play(next_board, game_state.move, game_state.player)
+        next_player = other(game_state.player)
+        if length(valid_moves(next_board, next_player)) == 0
+            print_board(next_board)
+            @printf("%s has no valid moves\n", next_player)
+        end
+    end
+    @printf("%s wins\n", game_record.winner)
 end
 
 function test_all()
